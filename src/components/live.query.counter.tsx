@@ -3,20 +3,36 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 
-export const getCurrentCount = () =>
-  fetch('http://localhost:4000/graphql', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      query: `
+const gqlUrl = 'http://localhost:4000/graphql'
+const wsUrl = 'ws://localhost:4000/graphql'
+
+
+const GET_CURRENT_COUNT = `
       query {
         currentNumber
       }
     `
-    })
-  })
+const SET_COUNTER_UPDATE = `
+      mutation CounterMutation($type: String) {
+        updateNumber(type: $type)
+      }
+    `
+const COUNTER_SUBSCRIPTION = `
+      subscription CounterSubscription {
+        updatedNumber
+      }
+    `
+
+function requestOptions(query: string, variables?: any) {
+  return {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables })
+  }
+}
+
+export const getCurrentCount = () =>
+  fetch(gqlUrl, requestOptions(GET_CURRENT_COUNT))
     .then((res) => res.json())
     .then((data) => data.data.currentNumber)
     .catch((error) => {
@@ -24,20 +40,7 @@ export const getCurrentCount = () =>
     });
 
 export const setCounterUpdate = ({ type }: { type: string }) =>
-  fetch('http://localhost:4000/graphql', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      query: `
-      mutation CounterMutation($type: String) {
-        updateNumber(type: $type)
-      }
-        `
-      , variables: { type }
-    })
-  })
+  fetch(gqlUrl, requestOptions(SET_COUNTER_UPDATE, { type }))
     .catch((error) => {
       console.error('error:', error)
     });
@@ -45,11 +48,11 @@ export const setCounterUpdate = ({ type }: { type: string }) =>
 const useReactQuerySubscription = () => {
   const queryClient = useQueryClient()
   React.useEffect(() => {
-    const ws = new WebSocket(url, 'graphql-transport-ws')
+    const ws = new WebSocket(wsUrl, 'graphql-transport-ws')
     ws.onopen = () => {
       ws.send(JSON.stringify({ "type": "connection_init", "payload": {} }));
       ws.send(JSON.stringify({
-        "id": "1",
+        "id": "2",
         "type": "subscribe",
         "payload": {
           "variables": {},
@@ -64,7 +67,7 @@ const useReactQuerySubscription = () => {
     }
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
-      const { payload: { data: { numberIncremented = null } = {} } = {} } = msg
+      const { payload: { data: { updatedNumber = null } = {} } = {} } = msg
       queryClient.invalidateQueries({ queryKey: ['counter'] })
 
     }
@@ -78,7 +81,6 @@ const useReactQuerySubscription = () => {
   }, [queryClient])
 }
 
-const url = 'ws://localhost:4000/subscriptions'
 
 const Spinner = () => (
   <div
@@ -94,7 +96,7 @@ const Spinner = () => (
 
 function LiveQueryCounter() {
   const { data: LiveCounter } = useQuery({ queryKey: ['counter'], queryFn: getCurrentCount })
-  const { mutate: setUpdateCounter } = useMutation({ mutationKey: ['counter', 'updated'], mutationFn: setCounterUpdate })
+  const { mutate: setUpdateCounter } = useMutation({ mutationKey: ['counter'], mutationFn: setCounterUpdate })
   const handleIncrement = (type: string) => () => setUpdateCounter({ type })
 
   useReactQuerySubscription(); // run the subscription hook to listen for updates

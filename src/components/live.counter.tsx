@@ -1,7 +1,7 @@
 'use client'
 import * as React from 'react'
 
-const url = 'ws://localhost:4000/subscriptions'
+const url = 'ws://localhost:4000/graphql'
 
 const Spinner = () => (
   <div
@@ -28,7 +28,7 @@ function LiveCounter() {
           "extensions": {},
           "operationName": "CounterSubscription",
           "query": `subscription CounterSubscription {
-            numberIncremented
+            updatedNumber
           }`
         }
       }))
@@ -36,8 +36,8 @@ function LiveCounter() {
     }
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
-      const { payload: { data: { numberIncremented = null } = {} } = {} } = msg
-      setLiveCounter(numberIncremented)
+      const { payload: { data: { updatedNumber = null } = {} } = {} } = msg
+      setLiveCounter(updatedNumber)
     }
     ws.onclose = () => {
       console.log('Disconnected from websocket')
@@ -83,10 +83,14 @@ function LiveCounter() {
       },
       body: JSON.stringify({
         query: `
-        mutation {
-          incrementNumber
+        mutation CounterMutation($type: String) {
+          updateNumber(type: $type)
         }
-      `
+      `,
+        variables: {
+          type: 'increment'
+        }
+
       })
     })
       .catch((error) => {
